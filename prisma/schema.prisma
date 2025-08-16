@@ -1,0 +1,147 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../server/node_modules/.prisma/client" 
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  password          String
+  name              String
+  phone             String?
+  walletAddress     String   @unique
+  walletPrivateKey  String // Encrypted
+  realBalance       Float    @default(0)
+  virtualBalance    Float    @default(0)
+  totalInvested     Float    @default(0)
+  totalGames        Int      @default(0)
+  totalWins         Int      @default(0)
+  totalLosses       Int      @default(0)
+  currentStreak     Int      @default(0)
+  maxStreak         Int      @default(0)
+  winRateMultiplier Float    @default(1.0) // Admin can adjust this
+  isAdmin           Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  games Game[]
+
+  rounds       GameRound[] // back relation to GameRound.user
+  transactions Transaction[] // (optional, if Transaction exists)
+
+  @@map("users")
+}
+
+model Game {
+  id         String     @id @default(cuid())
+  userId     String
+  stake      Float
+  initialPot Float
+  finalPot   Float?
+  rolls      Json[] // Array of roll data with dice values, scores, multipliers
+  status     GameStatus @default(ACTIVE)
+  cashedOut  Boolean    @default(false)
+  totalScore Int        @default(0)
+  rollCount  Int        @default(0)
+  seed       String // For provably fair
+  clientSeed String // Player provided seed
+  nonce      Int        @default(0)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("games")
+}
+
+model Transaction {
+  id          String            @id @default(cuid())
+  userId      String
+  type        TransactionType
+  amount      Float
+  balanceType BalanceType
+  description String
+  txHash      String? // For crypto transactions
+  status      TransactionStatus @default(PENDING)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("transactions")
+}
+
+model SiteSettings {
+  id            String   @id @default(cuid())
+  centralWallet String
+  minDeposit    Float    @default(5)
+  maxDeposit    Float    @default(10000)
+  houseEdge     Float    @default(0.02) // 2%
+  baseWinRate   Float    @default(0.45) // 45% base win rate
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("site_settings")
+}
+
+enum GameStatus {
+  ACTIVE
+  COMPLETED
+  CASHED_OUT
+  LOST
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  BET_PLACED
+  BET_WON
+  BET_LOST
+  BONUS_ADDED
+  CASH_OUT
+}
+
+enum BalanceType {
+  REAL
+  VIRTUAL
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum RoundStatus {
+  ACTIVE
+  CASHED_OUT
+  LOST
+  COMPLETED
+}
+
+model GameRound {
+  id         String      @id @default(cuid())
+  user       User        @relation(fields: [userId], references: [id])
+  userId     String
+  stake      Int
+  pot        Float       @default(0)
+  totalScore Int         @default(0)
+  status     RoundStatus @default(ACTIVE)
+  rolls      Json
+  clientSeed String
+  serverSeed String
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@index([userId])
+  @@map("game_rounds")
+}
